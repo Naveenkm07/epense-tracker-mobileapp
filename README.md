@@ -1,56 +1,62 @@
-# Welcome to your Expo app 👋
+# Expense Tracker
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A modern, highly-polished expense tracker built with React Native (Expo) designed to help you monitor and categorize your expenses quickly.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Modern & Beautiful UI/UX**: Hand-crafted layouts with shadows, Apple-like smooth typography, pie charts, and intuitive rounded cards.
+- **Secure Authentication**: Integration with Clerk handles signup, login, and robust session management safely.
+- **Cloud Database Integration**: Connected to Supabase with Row Level Security (RLS) guaranteeing user isolation and private data access via custom JWT injection logic.
+- **Expense Summaries**: Beautiful dashboard featuring a dynamic, interactive pie chart generated using `react-native-chart-kit`.
+- **Easy Entry & Import**: Create expenses manually with crisp UI inputs, or prepare to bulk import your history via Excel/CSV.
+- **Google Play Store Ready**: Formatted with standard packages (`com.epenesetarcker.app`), strict adaptive icons, custom splash screens, and configured EAS build profiles.
 
-   ```bash
-   npm install
-   ```
+## Setup for Development
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### 1. Install Dependencies
 ```bash
-npm run reset-project
+npm install --legacy-peer-deps
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Environment Variables
+Create a `.env` in the root folder with the following:
+```
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=ey...
+```
 
-### Other setup steps
+### 3. Start the Project
+```bash
+npm start
+# or 
+npx expo start
+```
+Press `a` to run on Android emulator, or `i` to run on iOS simulator.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Google Play Store Build (EAS)
 
-## Learn more
+1. **Install EAS CLI**
+   ```bash
+   npm install -g eas-cli
+   ```
+2. **Login to Expo**
+   ```bash
+   eas login
+   ```
+3. **Build Android App Bundle (AAB)**
+   ```bash
+   eas build -p android --profile production
+   ```
+4. **Submit to Play Store**
+   Download the generated `.aab` file and upload it directly to the Google Play Console, along with your created `PrivacyPolicy.md` (which you can host via GitHub pages or an arbitrary privacy policy hosting site).
 
-To learn more about developing your project with Expo, look at the following resources:
+## Security Overview
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+The app is secured via a strict Supabase + Clerk JWT handoff:
+1. Clerk handles the identity and JWT token creation on login.
+2. We query Supabase via a `createClerkSupabaseClient` factory that intercepts requests and passes the custom Clerk JWT in the headers.
+3. Supabase RLS enforces `auth.uid() = user_id`, keeping each user isolated from the rest.
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Privacy Policy
+A generated standard Privacy Policy is located in `PrivacyPolicy.md`. You will need to provide a public URL to this text in your Play Store console.
