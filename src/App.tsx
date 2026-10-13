@@ -3,8 +3,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { ClerkProvider } from '@clerk/clerk-react-native';
-import { useAuth, useUser } from '@clerk/clerk-react-native';
+import { ClerkProvider } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 
 import DashboardScreen from './app/(tabs)/index';
 import TransactionsScreen from './app/(tabs)/transactions';
