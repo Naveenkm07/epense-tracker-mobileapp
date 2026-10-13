@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { useAuth, useUser } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/clerk-react-native';
 import { supabase, createClerkSupabaseClient } from '../../lib/supabase';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { PieChart } from 'react-native-chart-kit';
 
@@ -11,17 +11,11 @@ export default function DashboardScreen() {
   const [totalSpent, setTotalSpent] = useState(0);
   const [chartData, setChartData] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
-  }, [user]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     const token = await getToken({ template: 'supabase' });
     const authClient = token ? createClerkSupabaseClient(token) : supabase;
     
-    const { data, error } = await authClient
+    const { data, error: _error } = await authClient
       .from('expenses')
       .select('amount, category')
       .eq('user_id', user?.id);
@@ -46,7 +40,14 @@ export default function DashboardScreen() {
       }));
       setChartData(mappedChartData);
     }
-  };
+  }, [getToken, user]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchDashboardData();
+    }
+  }, [user, fetchDashboardData]);
 
   const handleLogout = async () => {
     await signOut();

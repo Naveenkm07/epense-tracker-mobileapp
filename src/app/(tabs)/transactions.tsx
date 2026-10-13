@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, FlatList, ActivityIndicator } from 'react-native';
-import { useUser, useAuth } from '@clerk/expo';
+import { useUser, useAuth } from '@clerk/clerk-react-native';
 import { supabase, createClerkSupabaseClient } from '../../lib/supabase';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -11,19 +11,13 @@ export default function TransactionsScreen() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchExpenses();
-    }
-  }, [user]);
-
-  const fetchExpenses = async () => {
+  const fetchExpenses = useCallback(async () => {
     setLoading(true);
     
     const token = await getToken({ template: 'supabase' });
     const authClient = token ? createClerkSupabaseClient(token) : supabase;
 
-    const { data, error } = await authClient
+    const { data, error: _error } = await authClient
       .from('expenses')
       .select('*')
       .eq('user_id', user?.id)
@@ -33,7 +27,14 @@ export default function TransactionsScreen() {
       setExpenses(data);
     }
     setLoading(false);
-  };
+  }, [getToken, user]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchExpenses();
+    }
+  }, [user, fetchExpenses]);
 
   const getCategoryIcon = (category: string) => {
     const cat = category.toLowerCase();

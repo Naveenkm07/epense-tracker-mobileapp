@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useSignIn, useSignUp } from '@clerk/expo';
-import { useRouter } from 'expo-router';
+import { useAuth, useSignIn, useSignUp } from '@clerk/clerk-react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
-  const { signIn, setActive: setSignInActive, isLoaded: isSignInLoaded } = useSignIn();
-  const { signUp, setActive: setSignUpActive, isLoaded: isSignUpLoaded } = useSignUp();
-  const router = useRouter();
+  const { signIn, setActive } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
+  const signInControl = useSignIn();
+  const signUpControl = useSignUp();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,69 +16,98 @@ export default function LoginScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
 
+  const navigateAfterAuth = useCallback(async () => {
+    if (signInControl?.status === 'complete') {
+      await setActive({ session: signInControl.createdSessionId });
+    } else if (signUpControl?.status === 'complete') {
+      await setActive({ session: signUpControl.createdSessionId });
+    }
+  }, [signInControl, signUpControl, setActive]);
+
+  const getErrorMessage = (error: { longMessage?: string; message: string; code: string } | null) => {
+    if (!error) return 'Unknown error';
+    return error.longMessage || error.message;
+  };
+
   async function onSignInPress() {
-    if (!isSignInLoaded) return;
+    if (!signInControl || signInControl.status === 'loading') return;
     setLoading(true);
     try {
-      const completeSignIn = await signIn.create({
+      const { error } = await signInControl.create({
         identifier: email,
         password,
       });
-      if (completeSignIn.status === 'complete') {
-        await setSignInActive({ session: completeSignIn.createdSessionId });
-        router.replace('/');
-      } else {
-        console.error(JSON.stringify(completeSignIn, null, 2));
+      if (error) {
+        Alert.alert('Sign In Failed', getErrorMessage(error));
+        return;
+      }
+      if (signInControl.status === 'complete') {
+        await navigateAfterAuth();
+      } else if (signInControl.status === 'needs_second_factor') {
+        Alert.alert('2FA Required', 'Please complete two-factor authentication');
       }
     } catch (err: any) {
-      Alert.alert('Sign In Failed', err.errors?.[0]?.longMessage || err.errors?.[0]?.message || err.message);
+      Alert.alert('Sign In Failed', err.message);
     } finally {
       setLoading(false);
     }
   }
 
   async function onSignUpPress() {
-    if (!isSignUpLoaded) return;
+    if (!signUpControl || signUpControl.status === 'loading') return;
     setLoading(true);
     try {
-      const result = await signUp.create({
+      const { error } = await signUpControl.create({
         emailAddress: email,
         password,
       });
+      if (error) {
+        Alert.alert('Sign Up Failed', getErrorMessage(error));
+        return;
+      }
       
-      if (result.status === 'complete') {
-        await setSignUpActive({ session: result.createdSessionId });
-        router.replace('/');
-      } else {
-        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      if (signUpControl.status === 'complete') {
+        await navigateAfterAuth();
+      } else if (signUpControl.requiredFields?.includes('email_address')) {
+        await signUpControl.prepareEmailAddressVerification();
         setPendingVerification(true);
       }
     } catch (err: any) {
-      console.error(JSON.stringify(err, null, 2));
-      Alert.alert('Sign Up Failed', err.errors?.[0]?.longMessage || err.errors?.[0]?.message || err.message);
+      Alert.alert('Sign Up Failed', err.message);
     } finally {
       setLoading(false);
     }
   }
 
   async function onPressVerify() {
-    if (!isSignUpLoaded) return;
+    if (!signUpControl || signUpControl.status === 'loading') return;
     setLoading(true);
     try {
-      const completeSignUp = await signUp.attemptEmailAddressVerification({
-        code,
-      });
-      if (completeSignUp.status === 'complete') {
-        await setSignUpActive({ session: completeSignUp.createdSessionId });
-        router.replace('/');
-      } else {
-        console.error(JSON.stringify(completeSignUp, null, 2));
+      const { error } = await signUpControl.attemptEmailAddressVerification({ code });
+      if (error) {
+        Alert.alert('Verification Failed', getErrorMessage(error));
+        return;
+      }
+      if (signUpControl.status === 'complete') {
+        await navigateAfterAuth();
       }
     } catch (err: any) {
-      Alert.alert('Verification Failed', err.errors?.[0]?.longMessage || err.errors?.[0]?.message || err.message);
+      Alert.alert('Verification Failed', err.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!isLoaded) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (isSignedIn) {
+    return null;
   }
 
   if (pendingVerification) {
@@ -148,7 +177,7 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={styles.button}
-          disabled={loading}
+          disabled={loading || signInControl?.status === 'loading' || signUpControl?.status === 'loading'}
           onPress={() => isSignUp ? onSignUpPress() : onSignInPress()}
         >
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>}
