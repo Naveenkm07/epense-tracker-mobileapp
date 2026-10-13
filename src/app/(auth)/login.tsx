@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { useSignIn, useSignUp } from '@clerk/expo';
-import { useRouter } from 'expo-router';
+import { useAuth, useSignIn, useSignUp } from '@clerk/clerk-react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
-  const { signIn, errors: _signInErrors, fetchStatus: signInFetchStatus } = useSignIn();
-  const { signUp, errors: _signUpErrors, fetchStatus: signUpFetchStatus } = useSignUp();
-  const router = useRouter();
+  const { signIn, setActive } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
+  const signInControl = useSignIn();
+  const signUpControl = useSignUp();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,24 +16,13 @@ export default function LoginScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
 
-  const navigateAfterAuth = useCallback(async ({ session, decorateUrl }: { session: any; decorateUrl: (url: string) => string }) => {
-    if (session?.currentTask) {
-      // Handle session tasks (MFA enrollment, org selection, etc.) - redirect to login
-      const destination = decorateUrl('/(auth)/login');
-      if (destination.startsWith('https')) {
-        window.location.href = destination;
-      } else {
-        router.replace('/(auth)/login');
-      }
-      return;
+  const navigateAfterAuth = useCallback(async () => {
+    if (signInControl?.status === 'complete') {
+      await setActive({ session: signInControl.createdSessionId });
+    } else if (signUpControl?.status === 'complete') {
+      await setActive({ session: signUpControl.createdSessionId });
     }
-    const destination = decorateUrl('/(tabs)');
-    if (destination.startsWith('https')) {
-      window.location.href = destination;
-    } else {
-      router.replace('/(tabs)');
-    }
-  }, [router]);
+  }, [signInControl, signUpControl, setActive]);
 
   const getErrorMessage = (error: { longMessage?: string; message: string; code: string } | null) => {
     if (!error) return 'Unknown error';
@@ -41,17 +30,20 @@ export default function LoginScreen() {
   };
 
   async function onSignInPress() {
-    if (!signIn || signInFetchStatus === 'fetching') return;
+    if (!signInControl || signInControl.status === 'loading') return;
     setLoading(true);
     try {
-      const { error } = await signIn.password({ emailAddress: email, password });
+      const { error } = await signInControl.create({
+        identifier: email,
+        password,
+      });
       if (error) {
         Alert.alert('Sign In Failed', getErrorMessage(error));
         return;
       }
-      if (signIn.status === 'complete') {
-        await signIn.finalize({ navigate: navigateAfterAuth });
-      } else if (signIn.status === 'needs_second_factor') {
+      if (signInControl.status === 'complete') {
+        await navigateAfterAuth();
+      } else if (signInControl.status === 'needs_second_factor') {
         Alert.alert('2FA Required', 'Please complete two-factor authentication');
       }
     } catch (err: any) {
@@ -62,27 +54,22 @@ export default function LoginScreen() {
   }
 
   async function onSignUpPress() {
-    if (!signUp || signUpFetchStatus === 'fetching') return;
+    if (!signUpControl || signUpControl.status === 'loading') return;
     setLoading(true);
     try {
-      const { error } = await signUp.password({ emailAddress: email, password });
+      const { error } = await signUpControl.create({
+        emailAddress: email,
+        password,
+      });
       if (error) {
-        if (error.code === 'form_identifier_not_found') {
-          const { error: signUpError } = await signUp.password({ emailAddress: email, password });
-          if (signUpError) {
-            Alert.alert('Sign Up Failed', getErrorMessage(signUpError));
-            return;
-          }
-        } else {
-          Alert.alert('Sign Up Failed', getErrorMessage(error));
-          return;
-        }
+        Alert.alert('Sign Up Failed', getErrorMessage(error));
+        return;
       }
       
-      if (signUp.status === 'complete') {
-        await signUp.finalize({ navigate: navigateAfterAuth });
-      } else if (signUp.unverifiedFields?.includes('email_address')) {
-        await signUp.verifications.sendEmailCode();
+      if (signUpControl.status === 'complete') {
+        await navigateAfterAuth();
+      } else if (signUpControl.requiredFields?.includes('email_address')) {
+        await signUpControl.prepareEmailAddressVerification();
         setPendingVerification(true);
       }
     } catch (err: any) {
@@ -93,22 +80,34 @@ export default function LoginScreen() {
   }
 
   async function onPressVerify() {
-    if (!signUp || signUpFetchStatus === 'fetching') return;
+    if (!signUpControl || signUpControl.status === 'loading') return;
     setLoading(true);
     try {
-      const { error } = await signUp.verifications.verifyEmailCode({ code });
+      const { error } = await signUpControl.attemptEmailAddressVerification({ code });
       if (error) {
         Alert.alert('Verification Failed', getErrorMessage(error));
         return;
       }
-      if (signUp.status === 'complete') {
-        await signUp.finalize({ navigate: navigateAfterAuth });
+      if (signUpControl.status === 'complete') {
+        await navigateAfterAuth();
       }
     } catch (err: any) {
       Alert.alert('Verification Failed', err.message);
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!isLoaded) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (isSignedIn) {
+    return null;
   }
 
   if (pendingVerification) {
@@ -178,7 +177,7 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={styles.button}
-          disabled={loading || signInFetchStatus === 'fetching' || signUpFetchStatus === 'fetching'}
+          disabled={loading || signInControl?.status === 'loading' || signUpControl?.status === 'loading'}
           onPress={() => isSignUp ? onSignUpPress() : onSignInPress()}
         >
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>}
@@ -193,7 +192,6 @@ export default function LoginScreen() {
             <Text style={styles.switchTextBold}>{isSignUp ? 'Sign In' : 'Sign Up'}</Text>
           </Text>
         </TouchableOpacity>
-        {isSignUp && <View nativeID="clerk-captcha" />}
       </View>
     </KeyboardAvoidingView>
   );

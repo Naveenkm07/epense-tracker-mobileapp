@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, FlatList, ActivityIndicator } from 'react-native';
-import { useUser, useAuth } from '@clerk/expo';
+import { useUser, useAuth } from '@clerk/clerk-react-native';
 import { supabase, createClerkSupabaseClient } from '../../lib/supabase';
 import { useEffect, useState, useCallback } from 'react';
 import { format } from 'date-fns';

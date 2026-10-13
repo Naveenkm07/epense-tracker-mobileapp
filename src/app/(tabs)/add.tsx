@@ -1,15 +1,15 @@
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useState } from 'react';
 import { supabase, createClerkSupabaseClient } from '../../lib/supabase';
-import { useUser, useAuth } from '@clerk/expo';
-import * as DocumentPicker from 'expo-document-picker';
-import { useRouter } from 'expo-router';
+import { useUser, useAuth } from '@clerk/clerk-react-native';
+import * as DocumentPicker from 'react-native-document-picker';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function AddScreen() {
   const { user } = useUser();
   const { getToken } = useAuth();
-  const router = useRouter();
+  const navigation = useNavigation();
   
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
@@ -45,22 +45,22 @@ export default function AddScreen() {
       setAmount('');
       setCategory('');
       setNote('');
-      router.back();
+      navigation.goBack();
     }
   };
 
   const handleImportExcel = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'],
-        copyToCacheDirectory: true,
+      const result = await DocumentPicker.pick({
+        type: [DocumentPicker.types.xlsx, DocumentPicker.types.csv],
+        copyTo: 'documentDirectory',
       });
 
-      if (result.canceled) {
+      if (result.length === 0) {
         return;
       }
 
-      const file = result.assets[0];
+      const file = result[0];
       setUploading(true);
       
       const response = await fetch(file.uri);
@@ -73,7 +73,7 @@ export default function AddScreen() {
       const { error } = await authClient.storage
         .from('excel_imports')
         .upload(fileName, blob, {
-          contentType: file.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          contentType: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         });
 
       setUploading(false);
@@ -85,7 +85,9 @@ export default function AddScreen() {
       }
     } catch (err: any) {
       setUploading(false);
-      Alert.alert('Error', err.message);
+      if (err.name !== 'DocumentPickerCancel') {
+        Alert.alert('Error', err.message);
+      }
     }
   };
 
